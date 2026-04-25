@@ -1,14 +1,20 @@
 import mysql from 'mysql2/promise';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
 async function setupDatabase() {
+  if (!process.env.MYSQL_PASSWORD) {
+    console.error('❌ MYSQL_PASSWORD environment variable is required. Set it in .env.local and re-run.');
+    process.exit(1);
+  }
+
   const connection = await mysql.createConnection({
     host: process.env.MYSQL_HOST || 'localhost',
     port: parseInt(process.env.MYSQL_PORT || '3306'),
     user: process.env.MYSQL_USER || 'jakob-bilder-portfolio',
-    password: process.env.MYSQL_PASSWORD || 'A7f#kP9x!Q2mZr8L',
+    password: process.env.MYSQL_PASSWORD,
     database: process.env.MYSQL_DATABASE || 'jakob-bilder-portfolio',
   });
 
@@ -26,8 +32,8 @@ async function setupDatabase() {
     console.log('✓ Database schema created');
 
     const adminUsername = 'admin';
-    const adminPassword = 'admin123';
-    const hashedPassword = await bcrypt.hash(adminPassword, 10);
+    const adminPassword = process.env.ADMIN_PASSWORD || randomBytes(16).toString('hex');
+    const hashedPassword = await bcrypt.hash(adminPassword, 12);
 
     const [existingAdmin] = await connection.execute(
       'SELECT id FROM admin_users WHERE username = ?',
@@ -39,14 +45,15 @@ async function setupDatabase() {
         'INSERT INTO admin_users (username, password_hash, email) VALUES (?, ?, ?)',
         [adminUsername, hashedPassword, 'admin@example.com']
       );
-      console.log(`✓ Created admin user: ${adminUsername} / ${adminPassword}`);
-      console.log('⚠️  IMPORTANT: Change the admin password after logging in!');
+      console.log(`✓ Created admin user: ${adminUsername}`);
+      console.log(`  Password: ${adminPassword}`);
+      console.log('  Save this password — it will not be shown again.');
     } else {
-      console.log('✓ Admin user already exists');
+      console.log('✓ Admin user already exists, skipping creation');
     }
 
     console.log('\n✅ Database setup complete!');
-    console.log('\nYou can now log in to the admin dashboard at /admin/login');
+    console.log('Log in at /admin/login');
 
   } catch (error) {
     console.error('❌ Setup failed:', error.message);
